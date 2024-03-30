@@ -37,16 +37,18 @@ class JobType(Enum):
         "tamzamanlı",
         "повназайнятість",
         "toànthờigian",
+        "cdi"
     )
-    PART_TIME = ("parttime", "teilzeit", "částečnýúvazek", "deltid")
-    CONTRACT = ("contract", "contractor")
-    TEMPORARY = ("temporary",)
+    PART_TIME = ("parttime", "teilzeit", "částečnýúvazek", "deltid", "tempspartiel")
+    CONTRACT = ("contract", "contractor", "freelance")
+    TEMPORARY = ("temporary", "cdd", "cdd/temporaire")
     INTERNSHIP = (
         "internship",
         "prácticas",
         "ojt(onthejobtraining)",
         "praktikum",
         "praktik",
+        "alternance", "stage"
     )
 
     PER_DIEM = ("perdiem",)
@@ -211,7 +213,16 @@ class CompensationInterval(Enum):
             return interval_mapping[pay_period].value
         else:
             return cls[pay_period].value if pay_period in cls.__members__ else None
+class ExpType(Enum):
+    YEAR = "year"
+    MONTH = "month"
 
+    @classmethod
+    def get_ExpType(cls, str):
+        if str == "ans" or str == "an":
+            return cls.YEAR
+        if str == "mois":
+            return cls.MONTH
 
 class Compensation(BaseModel):
     interval: Optional[CompensationInterval] = None
@@ -224,6 +235,9 @@ class DescriptionFormat(Enum):
     MARKDOWN = "markdown"
     HTML = "html"
 
+class Exp(BaseModel):
+    type: Optional[ExpType] = None
+    count: int 
 
 class JobPost(BaseModel):
     id: str | None = None
@@ -253,6 +267,11 @@ class JobPost(BaseModel):
     ceo_photo_url: str | None = None
     logo_photo_url: str | None = None
     banner_photo_url: str | None = None
+
+    # WTF specify
+    exp: Exp | None = None
+    education_level: int | None = None
+    remote_details: str | None = None
 
 
 class JobResponse(BaseModel):

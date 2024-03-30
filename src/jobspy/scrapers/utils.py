@@ -9,6 +9,9 @@ from markdownify import markdownify as md
 from requests.adapters import HTTPAdapter, Retry
 
 from ..jobs import JobType
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+
 
 logger = logging.getLogger("JobSpy")
 logger.propagate = False
@@ -93,10 +96,14 @@ def get_enum_from_job_type(job_type_str: str) -> JobType | None:
     for job_type in JobType:
         if job_type_str in job_type.value:
             res = job_type
+
     return res
 
 
 def currency_parser(cur_str):
+    cur_str = cur_str.replace("k", "000")
+    cur_str = cur_str.replace("K", "000")
+    cur_str = cur_str.replace("€", "")
     # Remove any non-numerical characters
     # except for ',' '.' or '-' (e.g. EUR)
     cur_str = re.sub("[^-0-9.,]", "", cur_str)
@@ -111,3 +118,60 @@ def currency_parser(cur_str):
         num = float(cur_str)
 
     return np.round(num, 2)
+
+
+
+DEBUG=False
+BASE_URL="https://fr.indeed.com/cmp/"
+BASE_GLASSDOOR_URL="https://www.glassdoor.fr/"
+def getElement(elt, selector, selector_typ = By.XPATH):
+    try:
+       if elt == None:
+           return None
+
+       return elt.find_element(selector_typ, selector)
+        # If we are at this line, then find_element found something, and 
+    except NoSuchElementException:
+        if DEBUG:
+            print("not found element by selector " + selector)
+        return None
+
+
+def getElements(elt, selector, selector_typ = By.XPATH):
+    try:
+       if elt == None:
+           return None
+
+       return elt.find_elements(selector_typ, selector)
+        # If we are at this line, then find_element found something, and 
+    except NoSuchElementException:
+        if DEBUG:
+            print("not found element by selector " + selector)
+        return None
+
+def getElementText(elt, selector, selector_typ = By.XPATH):
+    try:
+       if elt == None:
+           return ''
+
+       return elt.find_element(selector_typ, selector).text
+        # If we are at this line, then find_element found something, and 
+    except NoSuchElementException:
+        if DEBUG:
+            print("not found element by selector " + selector)
+        return ''
+    
+def getElementsText(elt, selector, selector_typ = By.XPATH):
+    try:
+       if elt == None:
+           return []
+       eltList = getElements(elt,selector, selector_typ)
+       if elt == None:
+            return []
+       return list(map(lambda x: x.text, eltList))
+        # If we are at this line, then find_element found something, and 
+    except NoSuchElementException:
+        if DEBUG:
+            print("not found element by selector " + selector)
+        return ''
+    

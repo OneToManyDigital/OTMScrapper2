@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "python-jobspy"
-version = "1.1.53"
-description = "Job scraper for LinkedIn, Indeed, Glassdoor & ZipRecruiter"
+name = "python-jobspy-otm"
+version = "1.1.51"
+description = "Job scraper for LinkedIn, Indeed, Glassdoor, welcome to jungle & ZipRecruiter"
 authors = ["Zachary Hampton <zachary@bunsly.com>", "Cullen Watson <cullen@bunsly.com>"]
 homepage = "https://github.com/Bunsly/JobSpy"
 readme = "README.md"

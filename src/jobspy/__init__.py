@@ -10,6 +10,7 @@ from .scrapers.indeed import IndeedScraper
 from .scrapers.ziprecruiter import ZipRecruiterScraper
 from .scrapers.glassdoor import GlassdoorScraper
 from .scrapers.linkedin import LinkedInScraper
+from .scrapers.wtj import WTJScraper
 from .scrapers import ScraperInput, Site, JobResponse, Country
 from .scrapers.exceptions import (
     LinkedInException,
@@ -48,6 +49,7 @@ def scrape_jobs(
         Site.INDEED: IndeedScraper,
         Site.ZIP_RECRUITER: ZipRecruiterScraper,
         Site.GLASSDOOR: GlassdoorScraper,
+        Site.WELCOMETOJUNGLE: WTJScraper
     }
     set_logger_level(verbose)
 
@@ -156,6 +158,14 @@ def scrape_jobs(
                 job_data["max_amount"] = None
                 job_data["currency"] = None
 
+            exp_obj = job_data.get("exp")
+            if exp_obj and isinstance(exp_obj, dict):
+                job_data["exp_count"] = exp_obj.get("count")
+                job_data["exp_type"] = exp_obj.get("type").value
+            else:
+                job_data["exp_count"] = None
+                job_data["exp_type"] = None
+
             job_df = pd.DataFrame([job_data])
             jobs_dfs.append(job_df)
 
@@ -195,6 +205,10 @@ def scrape_jobs(
             "banner_photo_url",
             "ceo_name",
             "ceo_photo_url",
+            "exp_count",
+            "exp_type",
+            "education_level",
+            "remote_details",
         ]
 
         # Step 3: Ensure all desired columns are present, adding missing ones as empty
