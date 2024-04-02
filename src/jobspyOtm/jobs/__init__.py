@@ -41,7 +41,7 @@ class JobType(Enum):
     )
     PART_TIME = ("parttime", "teilzeit", "částečnýúvazek", "deltid", "tempspartiel")
     CONTRACT = ("contract", "contractor", "freelance")
-    TEMPORARY = ("temporary", "cdd", "cdd/temporaire")
+    TEMPORARY = ("temporary", "cdd", "cdd/temporaire", "cdd / temporaire")
     INTERNSHIP = (
         "internship",
         "prácticas",
@@ -53,7 +53,7 @@ class JobType(Enum):
 
     PER_DIEM = ("perdiem",)
     NIGHTS = ("nights",)
-    OTHER = ("other",)
+    OTHER = ("other","autres")
     SUMMER = ("summer",)
     VOLUNTEER = ("volunteer",)
 

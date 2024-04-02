@@ -1,8 +1,8 @@
 """
-jobspy.scrapers.linkedin
+jobspy.scrapers.Wtj
 ~~~~~~~~~~~~~~~~~~~
 
-This module contains routines to scrape LinkedIn.
+This module contains routines to scrape Welcome to jungle.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urlunparse
 
 from .. import Scraper, ScraperInput, Site
-from ..exceptions import LinkedInException
+from ..exceptions import WTJInException
 from ..utils import create_session, getElements,getElement,getElementText
 from ...jobs import (
     Exp,
@@ -122,8 +122,10 @@ def process_job(
             date_posted = None
     benefits_tag ="" 
     contract_tag = getElement(metadata_card, "*//i[@name='contract']/parent::*")
+    job_type=[]
     if contract_tag:
         employment_type = contract_tag.text.strip()
+        employment_type=employment_type.split("\n")[0]
         employment_type = employment_type.lower()
         employment_type = employment_type.replace("-", "")
         job_type = [get_enum_from_job_type(employment_type)] 
@@ -147,7 +149,13 @@ def process_job(
     education_level_tag= getElement(metadata_card, "*//i[@name='education_level']/parent::*")
     education_level=None
     if education_level_tag:
-       education_level= re.sub("[^-0-9]", "", education_level_tag.text)
+       value=re.sub("[^-0-9]", "", education_level_tag.text)
+       if value == '' and  education_level_tag.text.__contains__("Sans diplôme"):
+           education_level=0
+       elif value == '':
+           print(education_level_tag.text)
+       else:
+        education_level= int(value)
 
     description_tag= driver.get_elements_or_none_by_xpath('*//div[@id="the-position-section"]/div/div[2]')
     if len(description_tag) > 0:
@@ -200,67 +208,75 @@ class WTJScraper(Scraper):
         :return: job_response
         """
         self.scraper_input = scraper_input
-        job_list: list[JobPost] = []
-        seen_urls = set()
-        url_lock = Lock()
         page = scraper_input.offset // 25 + 25 if scraper_input.offset else 1
-        seconds_old = (
-            scraper_input.hours_old * 3600 if scraper_input.hours_old else None
-        )
-        continue_search = (
-            lambda: len(job_list) < scraper_input.results_wanted and page < 1000
-        )
-        while continue_search():
-            logger.info(f"WTJ search page: {page // 25 + 1}")
-            params = {
+        
+        range_start = 1 + (scraper_input.offset // self.jobs_per_page)
+        tot_pages = (scraper_input.results_wanted // self.jobs_per_page) + 2
+        range_end = tot_pages
+        all_jobs=[]
+        logger.info(f"WTJ start to scrappe from {range_start} to {range_end} ")
+        for page in range(range_start, range_end):
+            logger.info(f"WTJ search page: {page}")
+            try:
+                jobs = self._fetch_jobs_page(
+                    scraper_input, page
+                )
+                if jobs:
+                    all_jobs.extend(jobs)
+                if not jobs or len(all_jobs) >= scraper_input.results_wanted:
+                    logger.info(f"WTJ no more jobs")
+                    all_jobs = all_jobs[: scraper_input.results_wanted]
+                    break
+            except Exception as e:
+                logger.error(f"WTJ: {str(e)}")
+                break
+        return JobResponse(jobs=all_jobs)
+    
+    def _fetch_jobs_page(
+        self,
+        scraper_input: ScraperInput,
+        page_num: int
+    ) -> list[JobPost]:
+        """
+        Scrapes a page of Wtj for jobs with scraper_input criteria
+        """
+        job_list = []
+        self.scraper_input = scraper_input
+        params = {
                 "refinementList[offices.country_code][]": "FR" ,
                 "query": scraper_input.search_term,
                 "aroundQuery": scraper_input.location,
-                "page": page + scraper_input.offset,
+                "page":page_num,
             }
 
-            params = {k: v for k, v in params.items() if v is not None}
-            try:
-                queries= urlencode(dict(params))   
-                response= search_list(f"{self.base_url}/fr/jobs?{queries}" )
-            except Exception as e:
-                if "Proxy responded with" in str(e):
-                    logger.error(f"LinkedIn: Bad proxy")
-                else:
-                    logger.error(f"LinkedIn: {str(e)}")
-                return JobResponse(jobs=job_list)
-                
-            if len(response) == 0:
-                return JobResponse(jobs=job_list)
-            job_in_page=[]
-            for job_card in response:
-                job_url = None
+        params = {k: v for k, v in params.items() if v is not None}
+        try:
+            queries= urlencode(dict(params))   
+            response= search_list(f"{self.base_url}/fr/jobs?{queries}" )
+        except Exception as e:
+            if "Proxy responded with" in str(e):
+                logger.error(f"Welcome to jungle: Bad proxy")
+            else:
+                logger.error(f"Welcome to jungle: {str(e)}")
+            return JobResponse(jobs=job_list)
+            
+        if len(response) == 0:
+            return JobResponse(jobs=job_list)
+        job_in_page=[]
+        for job_card in response:
+            job_url = None
 
-                href_tag = getElement(job_card, "(*//a)[2]")
-                if href_tag and href_tag.get_attribute("href"):
-                    job_url = href_tag.get_attribute("href")
+            href_tag = getElement(job_card, "(*//a)[2]")
+            if href_tag and href_tag.get_attribute("href"):
+                job_url = href_tag.get_attribute("href")
+                job_in_page.append(job_url)
 
-                with url_lock:
-                    if job_url in seen_urls:
-                        continue
-                    seen_urls.add(job_url)
-                    job_in_page.append(job_url)
+        try:
+            job_post = process_job( job_in_page)
+            if job_post:
+                job_list.extend(job_post)
+        except Exception as e:
+            raise WTJInException(str(e))
 
-            try:
-                # to change to job_in_page when finish to avoid multiple chorme
-                job_post = process_job( job_in_page[:10])
-                if job_post:
-                    job_list.extend(job_post)
-                if not continue_search():
-                    break
-            except Exception as e:
-                raise LinkedInException(str(e))
-
-            #if continue_search():
-            #    time.sleep(random.uniform(self.delay, self.delay + self.band_delay))
-            #    page += 1
-#   
-        job_list = job_list[: scraper_input.results_wanted]
-        return JobResponse(jobs=job_list)
-
+        return job_list
 
