@@ -86,8 +86,12 @@ def process_job(
     if salary_tag and salary_tag != "Non spécifié":
         salary_text = salary_tag.strip()
         salary_values = [currency_parser(value) for value in salary_text.split(" à ")]
-        salary_min = salary_values[0]
-        salary_max = salary_values[1]
+        if len(salary_values) > 1:
+            salary_min = salary_values[0]
+            salary_max = salary_values[1]
+        else:
+            salary_min = salary_values[0]
+            salary_max = salary_values[0]
         currency = "€"
         compensation = Compensation(
             min_amount=int(salary_min),

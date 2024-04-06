@@ -96,6 +96,8 @@ def get_enum_from_job_type(job_type_str: str) -> JobType | None:
     for job_type in JobType:
         if job_type_str in job_type.value:
             res = job_type
+    if res == None:
+        print(f"====>{job_type_str}<====")
     return res
 
 

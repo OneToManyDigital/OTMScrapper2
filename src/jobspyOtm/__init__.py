@@ -12,6 +12,11 @@ from .scrapers.glassdoor import GlassdoorScraper
 from .scrapers.linkedin import LinkedInScraper
 from .scrapers.wtj import WTJScraper
 from .scrapers import ScraperInput, Site, JobResponse, Country
+from .company import CompanySite,CompanyResponse
+from .company.glassdoor_company import GlassdoorCpyScraper
+from .company.indeeds_company import IndeedCpyScraper
+from .company.wtj_company import WTJCpyScraper
+
 from .scrapers.exceptions import (
     LinkedInException,
     IndeedException,
@@ -223,3 +228,90 @@ def scrape_jobs(
         return jobs_df.sort_values(by=["site", "date_posted"], ascending=[True, False])
     else:
         return pd.DataFrame()
+
+
+def scrape_company(
+    companyList:  list[str]
+)-> pd.DataFrame:
+    SCRAPER_CPY_MAPPING = {
+        CompanySite.INDEED: IndeedCpyScraper,
+        CompanySite.GLASSDOOR: GlassdoorCpyScraper,
+        CompanySite.WELCOMETOJUNGLE: WTJCpyScraper
+    }
+    site_to_company_dict = {}
+    def scrape_site(site: CompanySite) -> Tuple[str, CompanyResponse]:
+        scraper_class = SCRAPER_CPY_MAPPING[site]
+        scraper = scraper_class()
+        scraped_data: CompanyResponse = scraper.scrape(companyList)
+        cap_name = site.value.capitalize()
+        logger.info(f"{cap_name} finished scraping")
+        return site.value, scraped_data
+
+    def worker(company):
+        site_val, scraped_info = scrape_site(company)
+        return site_val, scraped_info
+    
+    with ThreadPoolExecutor() as executor:
+        future_to_site = {
+            executor.submit(worker, companySite): companySite for companySite in CompanySite
+        }
+
+        for future in as_completed(future_to_site):
+            site_value, scraped_data = future.result()
+            site_to_company_dict[site_value] = scraped_data
+    company_dfs: list[pd.DataFrame] = []
+
+    for site, cpy_response in site_to_company_dict.items():
+        for company in cpy_response.companyList:
+            cpy_data = company.dict()
+            cpy_data["site"] = site
+            cpy_data["socials"] = (
+                ", ".join(cpy_data["socials"]) if cpy_data["socials"] else None
+            )
+            cpy_data["benefits"] = (
+                "__==__".join(cpy_data["benefits"]) if cpy_data["benefits"] else None
+            )
+            
+            cpy_df = pd.DataFrame([cpy_data])
+            company_dfs.append(cpy_df)
+    if company_dfs:
+        # Step 1: Filter out all-NA columns from each DataFrame before concatenation
+        filtered_dfs = [df.dropna(axis=1, how="all") for df in company_dfs]
+
+        # Step 2: Concatenate the filtered DataFrames
+        company_df = pd.concat(filtered_dfs, ignore_index=True)
+
+        # Desired column order
+        desired_order = [
+            "site",
+            "name",
+            "url",
+            "company_url",
+            "size",
+            "founded",
+            "type_of_ownership",
+            "sector",
+            "revenue",
+            "manPercentage",
+            "womanPercentage",
+            "averageAge",
+            "turnover",
+            "competitors",
+            "socials",
+            "description",
+            "goodToKnow",
+            "lookingFor",
+            "benefits"
+        ]
+        # Step 3: Ensure all desired columns are present, adding missing ones as empty
+        for column in desired_order:
+            if column not in company_df.columns:
+                company_df[column] = None  # Add missing columns as empty
+
+        # Reorder the DataFrame according to the desired order
+        company_df = company_df[desired_order]
+
+        # Step 4: Sort the DataFrame as required
+        return company_df.sort_values(by=["site"], ascending=[True])
+    else:
+     return pd.DataFrame()
