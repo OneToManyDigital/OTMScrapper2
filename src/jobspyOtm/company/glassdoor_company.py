@@ -1,5 +1,5 @@
-from botasaurus import *
-from botasaurus.wait import *
+
+from botasaurus import browser,AntiDetectDriver,bt
 from ..company import CompanyResponse, CompanyDescr, CompanySite
 
 
@@ -7,12 +7,9 @@ BASE_GLASSDOOR_URL="https://www.glassdoor.fr/"
 
 @browser(block_images=True,
          block_resources=True,
-        parallel=bt.calc_max_parallel_browsers,
          output=None,
-         reuse_driver=True,
         close_on_crash=True,
         cache=False,
-        keep_drivers_alive=True, 
         headless=True
          )
 def scrape_details_task(driver: AntiDetectDriver, data):
@@ -52,12 +49,9 @@ def scrape_details_task(driver: AntiDetectDriver, data):
 
 @browser(block_images=True,
          block_resources=True,
-        parallel=bt.calc_max_parallel_browsers,
          output=None,
-         reuse_driver=True,
         close_on_crash=True,
         cache=False,
-        keep_drivers_alive=True, 
         headless=True
          )
 def search_company(driver: AntiDetectDriver, data):
@@ -77,6 +71,8 @@ class GlassdoorCpyScraper():
     def scrape(self, companyList:  list[str]) -> CompanyResponse:
         all_company: list[CompanyDescr] = []
         for company in companyList:
+            if company is None or company == "":
+                continue
             __company= company.replace(" ", "-")
             result = search_company(__company)
             if result:

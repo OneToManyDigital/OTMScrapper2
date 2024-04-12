@@ -40,21 +40,21 @@ from ..utils import (
     currency_parser,
     markdown_converter,
 )
-from botasaurus import *
-from botasaurus.wait import *
+from botasaurus import browser,AntiDetectDriver,bt
 from urllib.parse import urlencode
 from time import sleep
 
+
 @browser(block_images=True,
-        block_resources=True,
+         block_resources=True,
         parallel=bt.calc_max_parallel_browsers,
-        output=None,
-        reuse_driver=True,
+         output=None,
+         reuse_driver=True,
         close_on_crash=True,
         cache=False,
         keep_drivers_alive=True, 
         headless=True
-        )
+         )
 def search_list(driver: AntiDetectDriver, data):
 
     # driver.organic_get(BASE_GLASSDOOR_URL+ "Overview/Working-at-" +data, accept_cookies=True)
@@ -65,15 +65,14 @@ def search_list(driver: AntiDetectDriver, data):
     return eltList
 
 @browser(block_images=True,
-        block_resources=True,
-        parallel=5,
-        output=None,
-        reuse_driver=True,
+         block_resources=True,
+         output=None,
+         reuse_driver=True,
         close_on_crash=True,
         cache=False,
         keep_drivers_alive=True, 
         headless=True
-        )
+         )
 def process_job(
     driver: AntiDetectDriver, data
 ) -> Optional[JobPost]:
@@ -263,7 +262,8 @@ class WTJScraper(Scraper):
             else:
                 logger.error(f"Welcome to jungle: {str(e)}")
             return JobResponse(jobs=job_list)
-            
+        
+        
         if len(response) == 0:
             return JobResponse(jobs=job_list)
         job_in_page=[]
@@ -281,6 +281,7 @@ class WTJScraper(Scraper):
                 job_list.extend(job_post)
         except Exception as e:
             raise WTJInException(str(e))
-
+        search_list.close()
+        process_job.close()
         return job_list
 

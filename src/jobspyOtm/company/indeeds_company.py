@@ -1,5 +1,5 @@
-from botasaurus import *
-from botasaurus.wait import *
+
+from botasaurus import browser,AntiDetectDriver,bt
 from ..company import CompanyResponse, CompanyDescr, CompanySite
 from ..scrapers.utils import getElementText,getElement, markdown_converter
 
@@ -8,12 +8,9 @@ BASE_URL="https://fr.indeed.com/cmp/"
 
 @browser(block_images=True,
          block_resources=True,
-        parallel=bt.calc_max_parallel_browsers,
          output=None,
-         reuse_driver=True,
         close_on_crash=True,
         cache=False,
-        keep_drivers_alive=True, 
         headless=True
          )
 def scrape_details_task(driver: AntiDetectDriver, data):
