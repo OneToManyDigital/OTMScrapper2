@@ -26,6 +26,7 @@ class CompanyDescr(BaseModel):
     lookingFor: str | None = None
     benefits: list[str]| None = None
     turnover: int | None = None
+    bestPlacesToWork: list[str] | None = None
 
 
 class CompanyResponse(BaseModel):

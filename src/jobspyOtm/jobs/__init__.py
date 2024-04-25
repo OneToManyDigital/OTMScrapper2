@@ -273,6 +273,9 @@ class JobPost(BaseModel):
     education_level: int | None = None
     remote_details: str | None = None
 
+    # for now specific glassdoor
+    company_id: int | None = None
+
 
 class JobResponse(BaseModel):
     jobs: list[JobPost] = []

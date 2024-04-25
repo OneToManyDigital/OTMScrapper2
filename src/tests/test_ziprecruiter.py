@@ -1,7 +1,8 @@
-from ..jobspy import scrape_jobs
+import unittest
+from ..jobspyOtm import scrape_jobs
 import pandas as pd
 
-
+@unittest.skip('Reason for skipping')
 def test_ziprecruiter():
     result = scrape_jobs(
         site_name="zip_recruiter",

@@ -3,7 +3,6 @@ from __future__ import annotations
 import pandas as pd
 from typing import Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 from .jobs import JobType, Location
 from .scrapers.utils import logger, set_logger_level
 from .scrapers.indeed import IndeedScraper
@@ -13,7 +12,8 @@ from .scrapers.linkedin import LinkedInScraper
 from .scrapers.wtj import WTJScraper
 from .scrapers import ScraperInput, Site, JobResponse, Country
 from .company import CompanySite,CompanyResponse
-from .company.glassdoor_company import GlassdoorCpyScraper
+from .company.glassdoor_company_with_name import  GlassdoorCpyScraperWithName
+from .company.glassdoor_company import  GlassdoorCpyScraper
 from .company.indeeds_company import IndeedCpyScraper
 from .company.wtj_company import WTJCpyScraper
 
@@ -23,7 +23,9 @@ from .scrapers.exceptions import (
     ZipRecruiterException,
     GlassdoorException,
 )
+import importlib.metadata
 
+__version__ = importlib.metadata.version("python-jobspy-otm")
 
 def scrape_jobs(
     site_name: str | list[str] | Site | list[Site] | None = None,
@@ -129,7 +131,7 @@ def scrape_jobs(
 
     for site, job_response in site_to_jobs_dict.items():
         for job in job_response.jobs:
-            job_data = job.dict()
+            job_data = job.model_dump()
             job_url = job_data["job_url"]
             job_data["job_url_hyper"] = f'<a href="{job_url}">{job_url}</a>'
             job_data["site"] = site
@@ -170,7 +172,7 @@ def scrape_jobs(
             else:
                 job_data["exp_count"] = None
                 job_data["exp_type"] = None
-
+            job_data['version_scraper'] =__version__
             job_df = pd.DataFrame([job_data])
             jobs_dfs.append(job_df)
 
@@ -214,6 +216,8 @@ def scrape_jobs(
             "exp_type",
             "education_level",
             "remote_details",
+            "company_id",
+            "version_scraper"
         ]
 
         # Step 3: Ensure all desired columns are present, adding missing ones as empty
@@ -231,11 +235,12 @@ def scrape_jobs(
 
 
 def scrape_company(
-    companyList:  list[str]
+    companyList:  list[str],
+    companyIdList:  list[str]
 )-> pd.DataFrame:
     SCRAPER_CPY_MAPPING = {
         CompanySite.INDEED: IndeedCpyScraper,
-        CompanySite.GLASSDOOR: GlassdoorCpyScraper,
+        CompanySite.GLASSDOOR: GlassdoorCpyScraperWithName,
         CompanySite.WELCOMETOJUNGLE: WTJCpyScraper
     }
     site_to_company_dict = {}
@@ -247,23 +252,33 @@ def scrape_company(
         logger.info(f"{cap_name} finished scraping")
         return site.value, scraped_data
 
-    def worker(company):
-        site_val, scraped_info = scrape_site(company)
+    def worker(companySite):
+        site_val, scraped_info = scrape_site(companySite)
         return site_val, scraped_info
+    
+    def worker_id():
+        scraped_data: CompanyResponse = GlassdoorCpyScraper().scrape(companyIdList=companyIdList, country=Country.FRANCE)
+        cap_name =CompanySite.GLASSDOOR.value.capitalize()
+        logger.info(f"{cap_name} with ids finished scraping")
+        return CompanySite.GLASSDOOR.value + "_id", scraped_data
     
     with ThreadPoolExecutor() as executor:
         future_to_site = {
             executor.submit(worker, companySite): companySite for companySite in CompanySite
         }
+        futureAlone = executor.submit(worker_id)
+        site_value, scraped_data = futureAlone.result()
+        site_to_company_dict[site_value] = scraped_data
 
         for future in as_completed(future_to_site):
             site_value, scraped_data = future.result()
             site_to_company_dict[site_value] = scraped_data
+
     company_dfs: list[pd.DataFrame] = []
 
     for site, cpy_response in site_to_company_dict.items():
         for company in cpy_response.companyList:
-            cpy_data = company.dict()
+            cpy_data = company.model_dump()
             cpy_data["site"] = site
             cpy_data["socials"] = (
                 ", ".join(cpy_data["socials"]) if cpy_data["socials"] else None
@@ -271,6 +286,12 @@ def scrape_company(
             cpy_data["benefits"] = (
                 "__==__".join(cpy_data["benefits"]) if cpy_data["benefits"] else None
             )
+
+            cpy_data["bestPlacesToWork"] = (
+                ", ".join(cpy_data["bestPlacesToWork"]) if cpy_data["bestPlacesToWork"] else None
+            )
+
+            cpy_data['version_scraper'] =__version__
             
             cpy_df = pd.DataFrame([cpy_data])
             company_dfs.append(cpy_df)
@@ -301,7 +322,9 @@ def scrape_company(
             "description",
             "goodToKnow",
             "lookingFor",
-            "benefits"
+            "benefits",
+            "bestPlacesToWork",
+            "version_scraper"
         ]
         # Step 3: Ensure all desired columns are present, adding missing ones as empty
         for column in desired_order:

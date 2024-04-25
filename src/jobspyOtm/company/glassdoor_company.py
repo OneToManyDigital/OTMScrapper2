@@ -1,81 +1,195 @@
 
-from botasaurus import browser,AntiDetectDriver,bt
+import json
+import logging
+import re
+from typing import Optional
+
+from ..scrapers.utils import create_session
+
+from ..jobs import Country
 from ..company import CompanyResponse, CompanyDescr, CompanySite
 
+LOGGER = logging.getLogger(__name__)
 
-BASE_GLASSDOOR_URL="https://www.glassdoor.fr/"
-
-@browser(block_images=True,
-         block_resources=True,
-         output=None,
-        close_on_crash=True,
-        cache=False,
-        headless=True
-         )
-def scrape_details_task(driver: AntiDetectDriver, data):
-    driver.organic_get(data, accept_cookies=True)
-    listELement= driver.get_elements_or_none_by_xpath('*//ul[@data-test="companyDetails"]//li')
-
-    headquarters=size=type_of_ownership = founded =revenue =sector =""
-    if listELement != None and len(listELement) > 0:
-        headquarters =  listELement[1].text
-        size = listELement[2].text
-        if len(listELement) > 4:
-            type_of_ownership =  listELement[4].text
-        #industry =  getElementText(info,'//label[text()="Industry"]//following-sibling::*')
-        if len(listELement) > 5:
-            founded = listELement[5].text
-        if len(listELement) > 6:
-            revenue =   listELement[6].text
-        if len(listELement) > 7:
-            sector = listELement[7].text
-    competitors = driver.get_elements_or_none_by_xpath('*//span[@class=" employer-overview__employer-overview-module__employerCompetitorsList"]')
-    socialLink =driver.get_elements_or_none_by_xpath('*//div[@id="SocialMediaBucket"]/a')
-    hrefList=[]
-    if socialLink:
-        for link in socialLink: 
-            hrefList.append(link.get_attribute("href"))
-    return CompanyDescr (
-         url = data,
-         headquarters= headquarters,
-         size=size,
-         founded=founded,
-         type_of_ownership= type_of_ownership,
-         sector= sector,
-         revenue=revenue,
-         competitors=competitors,
-         socials=hrefList
-    )
-
-@browser(block_images=True,
-         block_resources=True,
-         output=None,
-        close_on_crash=True,
-        cache=False,
-        headless=True
-         )
-def search_company(driver: AntiDetectDriver, data):
-
-    # driver.organic_get(BASE_GLASSDOOR_URL+ "Overview/Working-at-" +data, accept_cookies=True)
-    #driver.organic_get("https://www.glassdoor.fr/Pr%C3%A9sentation/Travailler-chez-Sopra-Steria-EI_IE466295.16,28.htm", accept_cookies=True)
-    driver.organic_get(f'{BASE_GLASSDOOR_URL}/Avis/{data}-avis-SRCH_KE0,5.htm', accept_cookies=True)
-    resultElements =driver.get_elements_or_none_by_xpath('//h2/a')
-    details=None
-    if resultElements != None and len(resultElements) > 0:
-           details= scrape_details_task(resultElements[0].get_attribute("href"))
-   
-    return details
 
 class GlassdoorCpyScraper():
 
-    def scrape(self, companyList:  list[str]) -> CompanyResponse:
+    def __init__(self, proxy: Optional[str] = None):
+        """
+        Initializes GlassdoorScraper with the Glassdoor job search url
+        """
+        self.proxy=proxy
+        self.base_url=None
+        
+    def scrape(self, companyIdList:  list[str], country: Country) -> CompanyResponse:
+        self.base_url=country.get_glassdoor_url()
+        self.session = create_session(self.proxy, is_tls=True, has_retry=True)
+        token = self._get_csrf_token()
+        self.headers["gd-csrf-token"] = token if token else self.fallback_token
+
         all_company: list[CompanyDescr] = []
-        for company in companyList:
+        for company in companyIdList:
             if company is None or company == "":
                 continue
-            __company= company.replace(" ", "-")
-            result = search_company(__company)
+            result = self._search_company(company)
             if result:
-                result.name = company
                 all_company.append(result)
         return CompanyResponse(companyList=all_company)
+    
+        
+    def _scrape_details_task(self, data):
+        mainData = data[0]['data']['employer']
+        if mainData is None:
+            return None
+        headquarters =  mainData['headquarters']
+        size = mainData['size']
+        name = mainData['shortName']
+        type_of_ownership= mainData['type']
+        founded= mainData['yearFounded']
+        revenue=mainData['type']
+        sector=mainData['primaryIndustry']['industryName'] if mainData['primaryIndustry']  else None
+        competitors = []
+        dataInJson =mainData['competitors']
+        if dataInJson:
+            for data in dataInJson:
+                competitors.append(data['shortName'])
+        bestPlacesToWork = []
+        dataInJson=mainData['bestPlacesToWorkAwards']
+        if dataInJson:
+            for data in dataInJson:
+                bestPlacesToWork.append(f'{data['rank']}__{data['timePeriod']}')
+
+        return CompanyDescr (
+            name= name,
+            headquarters= headquarters,
+            size=size,
+            founded=founded,
+            type_of_ownership= type_of_ownership,
+            sector= sector,
+            revenue=revenue,
+            competitors=", ".join(competitors) if competitors and len(competitors) > 0 else None,
+            bestPlacesToWork= bestPlacesToWork
+        )
+
+    def _search_company(self, companyId : str):
+
+        url = f"{self.base_url}/graph"
+        body = [
+            {
+                "operationName": "EmployerBaseDataQueryWithTld",
+                "variables": {
+                    "employerId": int(companyId),
+                    "isLoggedIn": True,
+                    "isROWProfile": False
+                },
+                "locale": "fr-FR",
+                "query": """query EmployerBaseDataQueryWithTld($employerId: Int!, $isLoggedIn: Boolean!, $isROWProfile: Boolean!, $tldId: Int) {
+                                employer(id: $employerId) {
+                                    id
+                                    shortName
+                                    website(useRow: $isROWProfile, useTld: $tldId)
+                                    type
+                                    revenue(useRow: $isROWProfile, useTld: $tldId)
+                                    headquarters(useRow: $isROWProfile, useTld: $tldId)
+                                    size(useRow: $isROWProfile, useTld: $tldId)
+                                    stock
+                                    squareLogoUrl(size: SMALL)
+                                    officeAddresses {
+                                    id
+                                    __typename
+                                    }
+                                    primaryIndustry {
+                                    industryId
+                                    industryName
+                                    sectorId
+                                    __typename
+                                    }
+                                    yearFounded
+                                    overview {
+                                    description
+                                    mission
+                                    __typename
+                                    }
+                                    links {
+                                    manageoLinkData {
+                                        url
+                                        urlText
+                                        employerSpecificText
+                                        __typename
+                                    }
+                                    faqUrl
+                                    __typename
+                                    }
+                                    bestPlacesToWorkAwards: bestPlacesToWork(onlyCurrent: false, limit: 30) {
+                                    id
+                                    name
+                                    rank
+                                    timePeriod
+                                    __typename
+                                    }
+                                    legalActionBadges {
+                                    headerText
+                                    bodyText
+                                    __typename
+                                    }
+                                    competitors {
+                                    shortName
+                                    __typename
+                                    }
+                                    __typename
+                                }
+                                getCompanyFollowsForUser @include(if: $isLoggedIn) {
+                                    employer {
+                                    id
+                                    __typename
+                                    }
+                                    follow
+                                    __typename
+                                }
+                                }
+
+                """,
+            }
+        ] 
+        res = self.session.post(url,
+                                 data=json.dumps(body), 
+                                headers=self.headers,
+                timeout_seconds=15)
+        if res.status_code != 200:
+            LOGGER.error(f'Error when call company glassdoor for {companyId} result : {res}')
+            return None
+        res_json = res.json()
+    
+        return self._scrape_details_task(res_json)
+    
+    def _get_csrf_token(self):
+        """
+        Fetches csrf token needed for API by visiting a generic page
+        """
+        res = self.session.get(
+            f"{self.base_url}/Job/computer-science-jobs.htm", headers=self.headers
+        )
+        pattern = r'"token":\s*"([^"]+)"'
+        matches = re.findall(pattern, res.text)
+        token = None
+        if matches:
+            token = matches[0]
+        return token
+
+    headers = {
+        "authority": "www.glassdoor.fr",
+        "accept": "*/*",
+        "accept-language": "fr-FR,fr;q=0.9",
+        "apollographql-client-name": "salary-search",
+        "apollographql-client-version": "10.27.8",
+        "content-type": "application/json",
+        "origin": "https://www.glassdoor.fr",
+        "referer": "https://www.glassdoor.fr/",
+        "sec-ch-ua": '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"macOS"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    }

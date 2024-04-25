@@ -1,12 +1,13 @@
 import logging
-from ..jobspyOtm import scrape_jobs
+
+from ..jobspyOtm import scrape_company
+from ..jobspyOtm.scrapers import Country
 import pandas as pd
 
-
 LOGGER = logging.getLogger(__name__)
-def test_indeed():
-    result = scrape_jobs(
-        site_name="glassdoor", search_term="software engineer", country_indeed="USA"
+
+def test_company():
+    result = scrape_company(companyList=[],companyIdList=["327894"]
     )
     LOGGER.error(result)
     assert 1 ==2

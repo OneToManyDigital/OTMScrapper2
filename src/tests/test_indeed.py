@@ -1,4 +1,4 @@
-from ..jobspy import scrape_jobs
+from ..jobspyOtm import scrape_jobs
 import pandas as pd
 
 

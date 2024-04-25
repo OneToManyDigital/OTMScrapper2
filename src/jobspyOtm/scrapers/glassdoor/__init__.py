@@ -7,6 +7,7 @@ This module contains routines to scrape Glassdoor.
 
 from __future__ import annotations
 
+import logging
 import re
 import json
 import requests
@@ -31,7 +32,6 @@ from ...jobs import (
     JobType,
     DescriptionFormat,
 )
-
 
 class GlassdoorScraper(Scraper):
     def __init__(self, proxy: Optional[str] = None):
@@ -62,7 +62,6 @@ class GlassdoorScraper(Scraper):
         self.session = create_session(self.proxy, is_tls=True, has_retry=True)
         token = self._get_csrf_token()
         self.headers["gd-csrf-token"] = token if token else self.fallback_token
-
         location_id, location_type = self._get_location(
             scraper_input.location, scraper_input.is_remote
         )
@@ -193,6 +192,7 @@ class GlassdoorScraper(Scraper):
             id=str(job_id),
             title=title,
             company_url=company_url if company_id else None,
+            company_id=company_id if company_id else None,
             company_name=company_name,
             date_posted=date_posted,
             job_url=job_url,
