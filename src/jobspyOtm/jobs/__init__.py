@@ -237,7 +237,7 @@ class DescriptionFormat(Enum):
 
 class Exp(BaseModel):
     type: Optional[ExpType] = None
-    count: int 
+    count: float 
 
 class JobPost(BaseModel):
     id: str | None = None
@@ -271,10 +271,13 @@ class JobPost(BaseModel):
     # WTF specify
     exp: Exp | None = None
     education_level: int | None = None
-    remote_details: str | None = None
+    remote_details: str | None = None 
+    benefits: list[str] | None = None
+    minDuration: int | None = None
+    maxDuration: int | None = None
 
-    # for now specific glassdoor
-    company_id: int | None = None
+    # for now specific glassdoor/wtj
+    company_id: str | None = None
 
 
 class JobResponse(BaseModel):

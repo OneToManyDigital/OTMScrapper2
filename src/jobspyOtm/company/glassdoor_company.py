@@ -57,7 +57,7 @@ class GlassdoorCpyScraper():
         dataInJson=mainData['bestPlacesToWorkAwards']
         if dataInJson:
             for data in dataInJson:
-                bestPlacesToWork.append(f'{data['rank']}__{data['timePeriod']}')
+                bestPlacesToWork.append(f'{data["rank"]}__{data["timePeriod"]}')
 
         return CompanyDescr (
             name= name,

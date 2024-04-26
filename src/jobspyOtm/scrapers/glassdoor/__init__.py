@@ -169,7 +169,7 @@ class GlassdoorScraper(Scraper):
         job = job_data["jobview"]
         title = job["job"]["jobTitleText"]
         company_name = job["header"]["employerNameFromSearch"]
-        company_id = job_data["jobview"]["header"]["employer"]["id"]
+        company_id = str(job_data["jobview"]["header"]["employer"]["id"])
         location_name = job["header"].get("locationName", "")
         location_type = job["header"].get("locationType", "")
         age_in_days = job["header"].get("ageInDays")

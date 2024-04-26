@@ -144,6 +144,10 @@ def scrape_jobs(
             job_data["emails"] = (
                 ", ".join(job_data["emails"]) if job_data["emails"] else None
             )
+            job_data["benefits"] = (
+                ", ".join(job_data["benefits"]) if job_data["benefits"] else None
+            )
+            
             if job_data["location"]:
                 job_data["location"] = Location(
                     **job_data["location"]
@@ -217,6 +221,9 @@ def scrape_jobs(
             "education_level",
             "remote_details",
             "company_id",
+            "minDuration",
+            "maxDuration",
+            "benefits",
             "version_scraper"
         ]
 

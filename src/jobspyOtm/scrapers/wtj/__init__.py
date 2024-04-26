@@ -40,159 +40,16 @@ from ..utils import (
     currency_parser,
     markdown_converter,
 )
-from botasaurus import browser,AntiDetectDriver,bt
 from urllib.parse import urlencode
 from time import sleep
+from lxml import html
 
-
-@browser(block_images=True,
-         block_resources=True,
-        parallel=bt.calc_max_parallel_browsers,
-         output=None,
-         reuse_driver=True,
-        close_on_crash=True,
-        cache=False,
-        keep_drivers_alive=True, 
-        headless=True
-         )
-def search_list(driver: AntiDetectDriver, data):
-
-    # driver.organic_get(BASE_GLASSDOOR_URL+ "Overview/Working-at-" +data, accept_cookies=True)
-    #driver.organic_get("https://www.glassdoor.fr/Pr%C3%A9sentation/Travailler-chez-Sopra-Steria-EI_IE466295.16,28.htm", accept_cookies=True)
-    driver.organic_get(data, accept_cookies=True)
-    sleep(3)
-    eltList= driver.get_elements_or_none_by_xpath('*//li[@data-testid="search-results-list-item-wrapper"]')
-    return eltList
-
-@browser(block_images=True,
-         block_resources=True,
-         output=None,
-         reuse_driver=True,
-        close_on_crash=True,
-        cache=False,
-        keep_drivers_alive=True, 
-        headless=True
-         )
-def process_job(
-    driver: AntiDetectDriver, data
-) -> Optional[JobPost]:
-    driver.organic_get(data, accept_cookies=True)
-    
-    metadata_card=driver.get_element_or_none_by_selector('[data-testid="job-metadata-block"]')
-    salary_tag = getElement(metadata_card, "*//i[@name='salary']/parent::*").text
-    compensation = None
-    salary_tag=salary_tag.split('\n')[1]
-    if salary_tag and salary_tag != "Non spécifié":
-        salary_text = salary_tag.strip()
-        salary_values = [currency_parser(value) for value in salary_text.split(" à ")]
-        if len(salary_values) > 1:
-            salary_min = salary_values[0]
-            salary_max = salary_values[1]
-        else:
-            salary_min = salary_values[0]
-            salary_max = salary_values[0]
-        currency = "€"
-        compensation = Compensation(
-            min_amount=int(salary_min),
-            max_amount=int(salary_max),
-            currency=currency,
-            interval=CompensationInterval.YEARLY
-        )
-
-    title = getElementText(metadata_card , "//h2")
-
-    company_a_tag = getElement(metadata_card, "*//a")
-    company_url = company_a_tag.get_attribute("href")
-    company_tag=getElement(company_a_tag, "//div/span")
-    if company_tag:
-        company = company_tag.text
-    
-    location = Location(
-                    city=getElement(metadata_card, "*//i[@name='location']/following-sibling::span[1]").text,
-                    country=Country.FRANCE,
-                )
-    
-    
-
-    datetime_tag= getElement(metadata_card, "*//time")
-    date_posted = description = job_type = None
-    if datetime_tag:
-        datetime_str = datetime_tag.get_attribute("datetime")
-        try:
-            subStr=datetime_str.split("T")[0]
-            date_posted = datetime.strptime(subStr, "%Y-%m-%d")
-        except:
-            date_posted = None
-    benefits_tag ="" 
-    contract_tag = getElement(metadata_card, "*//i[@name='contract']/parent::*")
-    job_type=[]
-    if contract_tag:
-        employment_type = contract_tag.text.strip()
-        employment_type=employment_type.split("\n")[0]
-        employment_type = employment_type.lower()
-        employment_type = employment_type.replace("-", "")
-        job_type = [get_enum_from_job_type(employment_type)] 
-    remote_tag= getElement(metadata_card, "*//i[@name='remote']/parent::*")
-    is_remote=False
-    remote_details=None
-    if remote_tag  :
-        remote_tag_txt=remote_tag.text
-        if remote_tag_txt == "Télétravail total":
-            is_remote=True
-            remote_details="full"
-        elif remote_tag_txt == "Télétravail occasionnel":
-            is_remote=True
-            remote_details="occasionnel"
-        elif remote_tag_txt == "Télétravail fréquent":
-            is_remote=True
-            remote_details="frequent"
-        else:
-            is_remote=False
-    
-    education_level_tag= getElement(metadata_card, "*//i[@name='education_level']/parent::*")
-    education_level=None
-    if education_level_tag:
-       value=re.sub("[^-0-9]", "", education_level_tag.text)
-       if value == '' and  education_level_tag.text.__contains__("Sans diplôme"):
-           education_level=0
-       elif value == '':
-           print(education_level_tag.text)
-       else:
-        education_level= int(value)
-
-    description_tag= driver.get_elements_or_none_by_xpath('*//div[@id="the-position-section"]/div/div[2]')
-    if len(description_tag) > 0:
-        description = markdown_converter(description_tag[0].get_attribute('innerHTML'))
-
-
-    suitcase_tag= getElement(metadata_card, "*//i[@name='suitcase']/parent::*")
-    year_exp=None
-    if suitcase_tag:
-       splited=suitcase_tag.text.split(" ")
-       year_exp= Exp(type= ExpType.get_ExpType(splited[3]), count=int(splited[2]))
-    
-    return JobPost(
-        title=title,
-        company_name=company,
-        company_url=company_url,
-        location=location,
-        date_posted=date_posted,
-        job_url=data,
-        compensation=compensation,
-        job_type=job_type,
-        description=description,
-        is_remote=is_remote,
-        emails=extract_emails_from_text(description) if description else None,
-        exp=year_exp,
-        education_level=education_level,
-        remote_details=remote_details
-    )
 
 class WTJScraper(Scraper):
-    base_url = "https://www.welcometothejungle.com"
+    base_url = "https://csekhvms53-dsn.algolia.net"
     delay = 3
     band_delay = 4
-    jobs_per_page = 31
+    jobs_per_page = 30
 
     def __init__(self, proxy: Optional[str] = None):
         """
@@ -211,12 +68,11 @@ class WTJScraper(Scraper):
         :return: job_response
         """
         self.scraper_input = scraper_input
-        page = scraper_input.offset // 25 + 25 if scraper_input.offset else 1
-        
-        range_start = 1 + (scraper_input.offset // self.jobs_per_page)
-        tot_pages = (scraper_input.results_wanted // self.jobs_per_page) + 2
-        range_end = tot_pages
-        all_jobs=[]
+        self.session = create_session(self.proxy, has_retry=True)
+        range_start = 0 + (scraper_input.offset // self.jobs_per_page)
+        tot_pages = (scraper_input.results_wanted // self.jobs_per_page) 
+        range_end = tot_pages + 1
+        all_jobs: list[JobPost] = []
         logger.info(f"WTJ start to scrappe from {range_start} to {range_end} ")
         for page in range(range_start, range_end):
             logger.info(f"WTJ search page: {page}")
@@ -239,49 +95,219 @@ class WTJScraper(Scraper):
         self,
         scraper_input: ScraperInput,
         page_num: int
-    ) -> list[JobPost]:
+    ) -> list[JobPost] :
         """
         Scrapes a page of Wtj for jobs with scraper_input criteria
         """
         job_list = []
         self.scraper_input = scraper_input
         params = {
-                "refinementList[offices.country_code][]": "FR" ,
-                "query": scraper_input.search_term,
-                "aroundQuery": scraper_input.location,
-                "page":page_num,
+                "x-algolia-agent": "Algolia%20for%20JavaScript%20(4.20.0)%3B%20Browser" ,
+                "search_origin": "job_search_client"
             }
 
+        payload = '''{"requests":[{"indexName":"wttj_jobs_production_fr","params":"attributesToHighlight=%5B%22name%22%5D&attributesToRetrieve=%5B%22*%22%5D&clickAnalytics=true&hitsPerPage=30&maxValuesPerFacet=999&analytics=true&enableABTest=true&userToken=e8729a0e-7ad4-46ad-896d-c8dab5fe3353&analyticsTags=%5B%22page%3Ajobs_index%22%2C%22language%3Afr%22%5D&facets=%5B%22benefits%22%2C%22contract_type%22%2C%22contract_duration_minimum%22%2C%22contract_duration_maximum%22%2C%22has_contract_duration%22%2C%22education_level%22%2C%22has_education_level%22%2C%22experience_level_minimum%22%2C%22has_experience_level_minimum%22%2C%22organization.nb_employees%22%2C%22organization.labels%22%2C%22salary_yearly_minimum%22%2C%22has_salary_yearly_minimum%22%2C%22salary_currency%22%2C%22followedCompanies%22%2C%22language%22%2C%22new_profession.category_reference%22%2C%22new_profession.sub_category_reference%22%2C%22remote%22%2C%22sectors.parent_reference%22%2C%22sectors.reference%22%5D&filters=(%22offices.country_code%22%3A%22FR%22)&page='''+str(page_num)+ '''&query='''+ scraper_input.search_term +'''"}]}'''
         params = {k: v for k, v in params.items() if v is not None}
         try:
+            
             queries= urlencode(dict(params))   
-            response= search_list(f"{self.base_url}/fr/jobs?{queries}" )
+            response = self.session.post(
+                f"{self.base_url}/1/indexes/*/queries?{queries}",
+                timeout_seconds=15,
+                headers=self.headers,
+                data=payload,
+            )
+            if response.status_code != 200:
+                exc_msg = f"bad response status code: {response.status_code}"
+                raise WTJInException(exc_msg)
+            res_json = response.json()['results'][0]['hits']
+            if "errors" in res_json:
+                raise ValueError("Error encountered in API response")
+        
         except Exception as e:
             if "Proxy responded with" in str(e):
                 logger.error(f"Welcome to jungle: Bad proxy")
             else:
                 logger.error(f"Welcome to jungle: {str(e)}")
-            return JobResponse(jobs=job_list)
-        
-        
-        if len(response) == 0:
-            return JobResponse(jobs=job_list)
-        job_in_page=[]
-        for job_card in response:
-            job_url = None
+            return job_list
+        for job in res_json:
+            try:
+                job_post = self.process_job( job)
+                if job_post:
+                    job_list.append(job_post)
+            except Exception as e:
+                raise WTJInException(str(e))
 
-            href_tag = getElement(job_card, "(*//a)[2]")
-            if href_tag and href_tag.get_attribute("href"):
-                job_url = href_tag.get_attribute("href")
-                job_in_page.append(job_url)
-
-        try:
-            job_post = process_job( job_in_page)
-            if job_post:
-                job_list.extend(job_post)
-        except Exception as e:
-            raise WTJInException(str(e))
-        search_list.close()
-        process_job.close()
+      
         return job_list
 
+    def process_job( self,data) -> JobPost | None:
+        
+        compensation = None
+
+        if data['has_salary_yearly_minimum']:
+            salary_min=int(data['salary_yearly_minimum']) if data['salary_yearly_minimum'] else None 
+            salary_max=int(data['salary_maximum']) if data['salary_maximum'] else None
+            currency = data['salary_currency']
+            compensation = Compensation(
+                min_amount=salary_min,
+                max_amount=salary_max,
+                currency=currency,
+                interval=CompensationInterval.YEARLY
+            )
+
+        title = data['name']
+        company = data['organization']
+        company_name=""
+        company_slug=""
+        company_url=""
+        if company:
+            company_name=company['name']
+            company_slug=company['slug']
+            company_url=f'https://www.welcometothejungle.com/fr/companies/{company_slug}'
+
+        offices= data['offices']
+        location= None
+        if offices and len(offices) > 0:
+            office = offices[0]
+            location = Location(
+                            city=office['city'],
+                            country=Country.from_string(office['country']),
+                            state=office['state']
+                        )
+        
+        
+
+        date_posted = description = job_type = None
+        if data['published_at']:
+            try:
+                subStr=data['published_at'].split("T")[0]
+                date_posted = datetime.strptime(subStr, "%Y-%m-%d")
+            except:
+                date_posted = None
+                
+        job_type=[]
+        if data['contract_type']:
+            try:
+                employment_type = data['contract_type'].strip()
+                employment_type= employment_type.split("\n")[0]
+                employment_type = employment_type.lower()
+                employment_type = employment_type.replace("-", "")
+                employment_type = employment_type.replace("_", "")
+                decoded_type = get_enum_from_job_type(employment_type)
+                if decoded_type:
+                    job_type = [decoded_type] 
+            except Exception as e:
+                logger.error(f'Cannot found job type for value {data["contract_type"]}')
+
+
+        is_remote=False
+        remote_details=None
+        if data['remote']  :
+            remote_tag_txt=data['remote']
+            if remote_tag_txt == "fulltime":
+                is_remote=True
+                remote_details="full"
+            elif remote_tag_txt == "punctual":
+                is_remote=True
+                remote_details="occasionnel"
+            elif remote_tag_txt == "partial":
+                is_remote=True
+                remote_details="frequent"
+            else:
+                is_remote=False
+        
+        education_level=None
+        if data['education_level']:
+            txt = data['education_level']
+            if txt == "no_diploma":
+                education_level=0
+            elif txt == "phd":
+                education_level= 7
+            else:
+                value=re.sub("[^-0-9]", "",txt)
+                if value != '':
+                    education_level= int(value)
+        else:
+            education_level=0
+
+        job_url=f'https://www.welcometothejungle.com/fr/companies/{company_slug}/jobs/{data["slug"]}?q=8179957587f8d086bec137c526e09a0c&o={data["reference"]}'
+        description =self._fetch_job_description(job_url)
+
+        year_exp=None
+        if data['experience_level_minimum']:
+            year_exp= Exp(type= ExpType.YEAR, count=float( data['experience_level_minimum']))
+        
+        benefits=None
+        if data['benefits'] and len(data['benefits']) > 0:
+            benefits = data['benefits']
+        
+        duration_max=data['contract_duration_minimum']
+        duration_min=data['contract_duration_maximum']
+
+        return JobPost(
+            title=title,
+            company_name=company_name,
+            company_url=company_url,
+            location=location,
+            date_posted=date_posted,
+            job_url=job_url,
+            compensation=compensation,
+            job_type=job_type,
+            description=description,
+            is_remote=is_remote,
+            emails=extract_emails_from_text(description) if description else None,
+            exp=year_exp,
+            education_level=education_level,
+            remote_details=remote_details,
+            company_id=company_slug,
+            benefits=benefits,
+            minDuration=duration_min,
+            maxDuration=duration_max
+        )
+    
+    def _fetch_job_description(self, job_url):
+
+        try:
+            response = self.session.get(
+                job_url,
+                timeout_seconds=15,
+                headers=self.headers
+            )
+            if response.status_code != 200:
+                exc_msg = f"bad response status code: {response.status_code}"
+                raise WTJInException(exc_msg)
+            
+            tree = html.fromstring(response.content)
+        except Exception as e:
+            if "Proxy responded with" in str(e):
+                logger.error(f"Welcome to jungle Description: Bad proxy")
+            else:
+                logger.error(f"Welcome to jungle Description: {str(e)}")
+            return ""
+
+        tag=tree.xpath('*//div[@id="the-position-section"]/div/div[2]')
+        if tag and len(tag) >0 :
+            innerHtml=  html.tostring(tag[0])
+            return markdown_converter(innerHtml)
+        else:
+            return ''
+
+
+    headers = {
+        "authority": "www.glassdoor.com",
+        "accept": "*/*",
+        "accept-language": "fr-FR,fr;q=0.9",
+        "content-type": "application/x-www-form-urlencoded",
+        "origin": "https://www.welcometothejungle.com",
+        "referer": "https://www.welcometothejungle.com/",
+        "sec-ch-ua": '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"macOS"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+        "X-Algolia-Api-Key": "4bd8f6215d0cc52b26430765769e65a0",
+        "X-Algolia-Application-Id": "CSEKHVMS53",
+    }
