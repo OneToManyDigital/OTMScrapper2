@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "python-jobspy-otm"
-version = "1.1.75"
+version = "1.1.80"
 description = "Job scraper for LinkedIn, Indeed, Glassdoor, welcome to jungle & ZipRecruiter"
 authors = ["Duchesne Lucas <lucas@onetomany.io>"]
 homepage = "https://github.com/OneToManyDigital"

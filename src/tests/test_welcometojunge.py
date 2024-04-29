@@ -11,9 +11,11 @@ def test_wtj():
     result = scrape_jobs(
     site_name=["WelcomeToJungle"],
     search_term="Product manager",
-    location="Paris, France",
-    results_wanted=32, 
+    location="Lyon",
+    results_wanted=5, 
     )
+
+    print(result)
     assert 1== 2
     assert (
         isinstance(result, pd.DataFrame) and not result.empty

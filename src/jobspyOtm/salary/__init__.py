@@ -1,9 +1,11 @@
 
+from enum import Enum
 from pydantic import BaseModel
 
 class Salary(BaseModel):
     jobId: str | None = None
     name: str 
+    fullJobName: str | None = None
     min_val: float | None = None
     max_val: float | None = None
     payPeriod: str | None = None
@@ -19,7 +21,10 @@ class Salary(BaseModel):
 class SalaryResponse(BaseModel):
     salaryList: list[Salary] = []
 
+class SalarySite(Enum):
+    GLASSDOOR = "glassdoor"
+    WELCOMETOJUNGLE = "WelcomeToJungle"
+
 class JobInput(BaseModel):
     jobId: str
     name: str
-

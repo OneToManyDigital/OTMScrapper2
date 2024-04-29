@@ -37,3 +37,7 @@ class CompanySite(Enum):
     INDEED = "indeed"
     GLASSDOOR = "glassdoor"
     WELCOMETOJUNGLE = "WelcomeToJungle"
+
+class CompanyInput(BaseModel):
+    id: str | None = None
+    name: str 

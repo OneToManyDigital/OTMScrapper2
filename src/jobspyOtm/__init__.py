@@ -3,6 +3,10 @@ from __future__ import annotations
 import pandas as pd
 from typing import Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from .salary.glassdoor_salary import GlassdoorSalaryScraper
+
+from .salary import JobInput, SalaryResponse, SalarySite
 from .jobs import JobType, Location
 from .scrapers.utils import logger, set_logger_level
 from .scrapers.indeed import IndeedScraper
@@ -11,7 +15,7 @@ from .scrapers.glassdoor import GlassdoorScraper
 from .scrapers.linkedin import LinkedInScraper
 from .scrapers.wtj import WTJScraper
 from .scrapers import ScraperInput, Site, JobResponse, Country
-from .company import CompanySite,CompanyResponse
+from .company import CompanyInput, CompanySite,CompanyResponse
 from .company.glassdoor_company_with_name import  GlassdoorCpyScraperWithName
 from .company.glassdoor_company import  GlassdoorCpyScraper
 from .company.indeeds_company import IndeedCpyScraper
@@ -242,19 +246,26 @@ def scrape_jobs(
 
 
 def scrape_company(
-    companyList:  list[str],
-    companyIdList:  list[str]
+    companyList:  list[CompanyInput]
 )-> pd.DataFrame:
     SCRAPER_CPY_MAPPING = {
         CompanySite.INDEED: IndeedCpyScraper,
         CompanySite.GLASSDOOR: GlassdoorCpyScraperWithName,
         CompanySite.WELCOMETOJUNGLE: WTJCpyScraper
     }
+
+    idsList= [obj.id for obj in companyList if obj.id is not None]
+    namesList_withoutIds= [obj.name for obj in companyList if obj.id is None]
+    namesList = [obj.name for obj in companyList]
+
     site_to_company_dict = {}
     def scrape_site(site: CompanySite) -> Tuple[str, CompanyResponse]:
         scraper_class = SCRAPER_CPY_MAPPING[site]
         scraper = scraper_class()
-        scraped_data: CompanyResponse = scraper.scrape(companyList)
+        if site == CompanySite.GLASSDOOR:
+            scraped_data: CompanyResponse = scraper.scrape(namesList_withoutIds)
+        else:
+            scraped_data: CompanyResponse = scraper.scrape(namesList)
         cap_name = site.value.capitalize()
         logger.info(f"{cap_name} finished scraping")
         return site.value, scraped_data
@@ -264,7 +275,7 @@ def scrape_company(
         return site_val, scraped_info
     
     def worker_id():
-        scraped_data: CompanyResponse = GlassdoorCpyScraper().scrape(companyIdList=companyIdList, country=Country.FRANCE)
+        scraped_data: CompanyResponse = GlassdoorCpyScraper().scrape(companyIdList=idsList, country=Country.FRANCE)
         cap_name =CompanySite.GLASSDOOR.value.capitalize()
         logger.info(f"{cap_name} with ids finished scraping")
         return CompanySite.GLASSDOOR.value + "_id", scraped_data
@@ -343,5 +354,84 @@ def scrape_company(
 
         # Step 4: Sort the DataFrame as required
         return company_df.sort_values(by=["site"], ascending=[True])
+    else:
+     return pd.DataFrame()
+    
+
+
+def scrape_salary(
+    jobInputList:  list[JobInput]
+)-> pd.DataFrame:
+    SCRAPER_SALARY_MAPPING = {
+        SalarySite.GLASSDOOR: GlassdoorSalaryScraper
+    }
+    
+    ALLOW_SITE = [SalarySite.GLASSDOOR]
+
+    site_to_salary_dict = {}
+    def scrape_site(site: SalarySite) -> Tuple[str, SalaryResponse]:
+        scraper_class = SCRAPER_SALARY_MAPPING[site]
+        scraper = scraper_class()
+        scraped_data: SalaryResponse = scraper.scrapeList(jobInputList)
+        cap_name = site.value.capitalize()
+        logger.info(f"{cap_name} finished scraping")
+        return site.value, scraped_data
+
+    def worker(site):
+        site_val, scraped_info = scrape_site(site)
+        return site_val, scraped_info
+    
+    with ThreadPoolExecutor() as executor:
+        future_to_site = {
+            executor.submit(worker, salarySite): salarySite for salarySite in ALLOW_SITE
+        }
+
+        for future in as_completed(future_to_site):
+            site_value, scraped_data = future.result()
+            site_to_salary_dict[site_value] = scraped_data
+
+    salary_dfs: list[pd.DataFrame] = []
+
+    for site, salary_response in site_to_salary_dict.items():
+        for salary in salary_response.salaryList:
+            salary_data = salary.model_dump()
+            salary_data["site"] = site
+            
+            salary_data['version_scraper'] =__version__
+            
+            cpy_df = pd.DataFrame([salary_data])
+            salary_dfs.append(cpy_df)
+    if salary_dfs:
+        # Step 1: Filter out all-NA columns from each DataFrame before concatenation
+        filtered_dfs = [df.dropna(axis=1, how="all") for df in salary_dfs]
+
+        # Step 2: Concatenate the filtered DataFrames
+        salary_df = pd.concat(filtered_dfs, ignore_index=True)
+
+        # Desired column order
+        desired_order = [
+            "site",
+            "name",
+            "fullJobName",
+            "jobId",
+            "min_val",
+            "max_val",
+            "payPeriod",
+            "currency",
+            "location",
+            "exp",
+            "version_scraper",
+        ]
+
+        # Step 3: Ensure all desired columns are present, adding missing ones as empty
+        for column in desired_order:
+            if column not in salary_df.columns:
+                salary_df[column] = None  # Add missing columns as empty
+
+        # Reorder the DataFrame according to the desired order
+        salary_df = salary_df[desired_order]
+
+        # Step 4: Sort the DataFrame as required
+        return salary_df.sort_values(by=["site"], ascending=[True])
     else:
      return pd.DataFrame()

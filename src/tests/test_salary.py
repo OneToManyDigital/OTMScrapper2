@@ -1,4 +1,6 @@
 import logging
+
+from src.jobspyOtm import scrape_salary
 from ..jobspyOtm.salary.glassdoor_salary import GlassdoorSalaryScraper
 from ..jobspyOtm.salary import JobInput, Salary,SalaryResponse
 from ..jobspyOtm.scrapers import Country
@@ -22,7 +24,7 @@ def test_multiple():
     for index, row in sample.iterrows():
         job = JobInput(jobId= row['id'], name=row['title'])
         inputs.append(job)
-    result = GlassdoorSalaryScraper().scrapeList(jobTitleList=inputs, country= Country.FRANCE)
+    result = scrape_salary(jobInputList=inputs)
     #LOGGER.error(f'Job {sample['title'].item()} company {sample['company'].item()}  Min amount : {sample['min_amount'].item()} and max amount {sample['max_amount'].item()} result glassdoor {result}')
     LOGGER.error(result)
     assert len(result) == 2

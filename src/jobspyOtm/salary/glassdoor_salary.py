@@ -93,6 +93,8 @@ class GlassdoorSalaryScraper():
             LOGGER.error(f'Error when call salary for {jobTilte} result : {res}')
             return None
         res_json = res.json()[0]
+        if res_json == None or res_json["data"]== None or  res_json["data"]["occSalaryEstimates"] == None:
+            return None
         salary_data = res_json["data"]["occSalaryEstimates"]["basePayPercentiles"]
         if salary_data == None:
             return None
@@ -110,7 +112,7 @@ class GlassdoorSalaryScraper():
         return Salary(name=nameRes,min_val=min_val,max_val=max_val, currency=currency,payPeriod=payPeriod,location=location)
 
 
-    def scrapeList(self, jobTitleList:  list[JobInput], country: Country) -> DataFrame:
+    def scrapeList(self, jobTitleList:  list[JobInput], country: Country = Country.FRANCE) -> SalaryResponse:
         
         self.base_url=country.get_glassdoor_url()
         self.session = create_session(self.proxy, is_tls=True, has_retry=True)
@@ -125,74 +127,41 @@ class GlassdoorSalaryScraper():
             jobTitleFixed = jobTitleFixed.replace("(e)", "")
             jobTitleFixed = jobTitleFixed.replace("H/F", "")
             jobTitleFixed = jobTitleFixed.replace("F/H", "")
-            jobTitleFixed = jobTitleFixed.replace("-", "")
+            jobTitleFixed = jobTitleFixed.replace("F/H/X", "")
+            
+            jobTitleFixed = jobTitleFixed.replace(".euse", "")
+            jobTitleFixed = jobTitleFixed.replace("/Euse", "")
+           
+            
             jobTitleFixed = jobTitleFixed.strip()
+            jobTitleFixed = jobTitleFixed.lower()
             tmpSalary= []
-            if jobTitleFixed.__contains__("/"):
-                subJobTitle= jobTitleFixed.split("/")
+            
+            if jobTitleFixed.__contains__(" - "):
+                subJobTitle= jobTitleFixed.split(" - ")
                 for subJob in subJobTitle:
-                    tmpSalary.append(self._scrape(jobTilte=subJob,country=country))
+                    subJob= subJob.strip()
+                    subJob= subJob.replace("-", " ")
+                    if subJob.__contains__("/"):
+                        subSubJobTitle= jobTitleFixed.split("/")
+                        for subSubJob in subSubJobTitle:
+                            subSubJob= subSubJob.strip()
+                            tmpSalary.append(self._scrape(jobTilte=subSubJob,country=country))
+                    else:
+                        tmpSalary.append(self._scrape(jobTilte=subJob,country=country))
             else:
                 tmpSalary.append(self._scrape(jobTilte=jobTitleFixed,country=country))
             
             if all(x is None for x in tmpSalary):
                 LOGGER.error(f'Cannot found salary for job {job.name}')
             else:
-                if len(tmpSalary)  == 1:
-                    tmpSalary[0].jobId = job.jobId
-                    salaryList.extend(tmpSalary)
-                else:
-                    min_val =  None   
-                    max_val = None
-                    res = None
-                    for salary in tmpSalary:
-                        if salary != None:
-                            res = salary
-                            if max_val is None or salary.max_val > max_val:
-                                max_val = salary.max_val
-                            if min_val is None or salary.min_val < min_val:
-                                min_val = salary.min_val
-                    res.min_val = min_val
-                    res.max_val = max_val
-                    res.jobId = job.jobId
-                    salaryList.append(res)
-        salary_dfs: list[pd.DataFrame] = []
-        for salary in salaryList:
-            data = salary.model_dump()
-            salary_df = pd.DataFrame([data])
-            salary_dfs.append(salary_df)
-
-        if salary_dfs:
-            # Step 1: Filter out all-NA columns from each DataFrame before concatenation
-            filtered_dfs = [df.dropna(axis=1, how="all") for df in salary_dfs]
-
-            # Step 2: Concatenate the filtered DataFrames
-            salary_df = pd.concat(filtered_dfs, ignore_index=True)
-
-            # Desired column order
-            desired_order = [
-                "jobId",
-                "name",
-                "min_val",
-                "max_val",
-                "position",
-                "payPeriod",
-                "currency",
-                "exp"
-            ]
-
-            # Step 3: Ensure all desired columns are present, adding missing ones as empty
-            for column in desired_order:
-                if column not in salary_df.columns:
-                    salary_df[column] = None  # Add missing columns as empty
-
-            # Reorder the DataFrame according to the desired order
-            salary_df = salary_df[desired_order]
-
-            # Step 4: Sort the DataFrame as required
-            return salary_df.sort_values(by=["name"], ascending=[True])
-        else:
-            return pd.DataFrame()
+                tmpSalary=[obj for obj in tmpSalary if obj is not None]
+                for salary in tmpSalary:
+                    salary.jobId = job.jobId
+                    salary.fullJobName = job.name
+                salaryList.extend(tmpSalary)
+             
+        return SalaryResponse(salaryList=salaryList)
         
 
 

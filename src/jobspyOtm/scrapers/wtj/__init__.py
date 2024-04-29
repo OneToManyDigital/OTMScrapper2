@@ -16,7 +16,7 @@ from datetime import datetime
 from threading import Lock
 from bs4.element import Tag
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 from .. import Scraper, ScraperInput, Site
 from ..exceptions import WTJInException
@@ -73,12 +73,17 @@ class WTJScraper(Scraper):
         tot_pages = (scraper_input.results_wanted // self.jobs_per_page) 
         range_end = tot_pages + 1
         all_jobs: list[JobPost] = []
+
+        location_lat = location_long= None
+        if scraper_input.location:
+            location_lat,location_long = self._get_location(scraper_input.location)
+
         logger.info(f"WTJ start to scrappe from {range_start} to {range_end} ")
         for page in range(range_start, range_end):
             logger.info(f"WTJ search page: {page}")
             try:
                 jobs = self._fetch_jobs_page(
-                    scraper_input, page
+                    scraper_input, page,location_long,location_lat
                 )
                 if jobs:
                     all_jobs.extend(jobs)
@@ -94,7 +99,9 @@ class WTJScraper(Scraper):
     def _fetch_jobs_page(
         self,
         scraper_input: ScraperInput,
-        page_num: int
+        page_num: int,
+        location_long: float | None,
+        location_lat: float | None
     ) -> list[JobPost] :
         """
         Scrapes a page of Wtj for jobs with scraper_input criteria
@@ -105,8 +112,13 @@ class WTJScraper(Scraper):
                 "x-algolia-agent": "Algolia%20for%20JavaScript%20(4.20.0)%3B%20Browser" ,
                 "search_origin": "job_search_client"
             }
+        serializableInput=quote_plus(scraper_input.search_term)
+        payload = '''{"requests":[{"indexName":"wttj_jobs_production_fr","params":"attributesToHighlight=%5B%22name%22%5D&attributesToRetrieve=%5B%22*%22%5D&clickAnalytics=true&hitsPerPage=30&maxValuesPerFacet=999&analytics=true&enableABTest=true&userToken=e8729a0e-7ad4-46ad-896d-c8dab5fe3353&analyticsTags=%5B%22page%3Ajobs_index%22%2C%22language%3Afr%22%5D&facets=%5B%22benefits%22%2C%22contract_type%22%2C%22contract_duration_minimum%22%2C%22contract_duration_maximum%22%2C%22has_contract_duration%22%2C%22education_level%22%2C%22has_education_level%22%2C%22experience_level_minimum%22%2C%22has_experience_level_minimum%22%2C%22organization.nb_employees%22%2C%22organization.labels%22%2C%22salary_yearly_minimum%22%2C%22has_salary_yearly_minimum%22%2C%22salary_currency%22%2C%22followedCompanies%22%2C%22language%22%2C%22new_profession.category_reference%22%2C%22new_profession.sub_category_reference%22%2C%22remote%22%2C%22sectors.parent_reference%22%2C%22sectors.reference%22%5D&filters=(%22offices.country_code%22%3A%22FR%22)&page='''+str(page_num)+ '''&query='''+ serializableInput
 
-        payload = '''{"requests":[{"indexName":"wttj_jobs_production_fr","params":"attributesToHighlight=%5B%22name%22%5D&attributesToRetrieve=%5B%22*%22%5D&clickAnalytics=true&hitsPerPage=30&maxValuesPerFacet=999&analytics=true&enableABTest=true&userToken=e8729a0e-7ad4-46ad-896d-c8dab5fe3353&analyticsTags=%5B%22page%3Ajobs_index%22%2C%22language%3Afr%22%5D&facets=%5B%22benefits%22%2C%22contract_type%22%2C%22contract_duration_minimum%22%2C%22contract_duration_maximum%22%2C%22has_contract_duration%22%2C%22education_level%22%2C%22has_education_level%22%2C%22experience_level_minimum%22%2C%22has_experience_level_minimum%22%2C%22organization.nb_employees%22%2C%22organization.labels%22%2C%22salary_yearly_minimum%22%2C%22has_salary_yearly_minimum%22%2C%22salary_currency%22%2C%22followedCompanies%22%2C%22language%22%2C%22new_profession.category_reference%22%2C%22new_profession.sub_category_reference%22%2C%22remote%22%2C%22sectors.parent_reference%22%2C%22sectors.reference%22%5D&filters=(%22offices.country_code%22%3A%22FR%22)&page='''+str(page_num)+ '''&query='''+ scraper_input.search_term +'''"}]}'''
+        if location_long and location_lat:
+            payload = payload + f'&aroundLatLng={location_lat}%2C{location_long}&aroundRadius=20000&aroundPrecision=20000'
+  
+        payload = payload +'''"}]}'''
         params = {k: v for k, v in params.items() if v is not None}
         try:
             
@@ -293,7 +305,39 @@ class WTJScraper(Scraper):
         else:
             return ''
 
+    def _get_location(self,locationSearch: str) :
+        API_KEK="3YHjVgEYjuwUatQAtD-wTX8lmNXEsULPzC8m59VMGDw"
+        try:
+            queryEncode=quote_plus(locationSearch)
+            response = self.session.get(
+                f'https://autocomplete.search.hereapi.com/v1/autocomplete?apiKey={API_KEK}&q={queryEncode}&lang=fr&limit=1',
+                timeout_seconds=15,
+                headers=self.headers
+            )
+            if response.status_code != 200:
+                exc_msg = f"bad response status code: {response.status_code}"
+                raise WTJInException(exc_msg)
+            
+            placeId = response.json()['items'][0]['id']
 
+            response = self.session.get(
+                f'https://lookup.search.hereapi.com/v1/lookup?apiKey={API_KEK}&lang=en&id={placeId}',
+                timeout_seconds=15,
+                headers=self.headers
+            )
+            if response.status_code != 200:
+                exc_msg = f"bad response status code: {response.status_code}"
+                raise WTJInException(exc_msg)
+            re_json=response.json()
+            return re_json['position']['lat'],re_json['position']['lng']
+
+        except Exception as e:
+            if "Proxy responded with" in str(e):
+                logger.error(f"Welcome to jungle location: Bad proxy")
+            else:
+                logger.error(f"Welcome to jungle location: {str(e)}")
+            return None,None
+        
     headers = {
         "authority": "www.glassdoor.com",
         "accept": "*/*",
