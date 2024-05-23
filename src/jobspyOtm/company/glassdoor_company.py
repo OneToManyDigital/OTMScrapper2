@@ -175,7 +175,9 @@ class GlassdoorCpyScraper():
         if matches:
             token = matches[0]
         return token
-
+    
+    fallback_token = "Ft6oHEWlRZrxDww95Cpazw:0pGUrkb2y3TyOpAIqF2vbPmUXoXVkD3oEGDVkvfeCerceQ5-n8mBg3BovySUIjmCPHCaW0H2nQVdqzbtsYqf4Q:wcqRqeegRUa9MVLJGyujVXB7vWFPjdaS1CtrrzJq-ok"
+    
     headers = {
         "authority": "www.glassdoor.fr",
         "accept": "*/*",

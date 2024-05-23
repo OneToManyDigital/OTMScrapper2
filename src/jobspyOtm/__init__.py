@@ -246,7 +246,8 @@ def scrape_jobs(
 
 
 def scrape_company(
-    companyList:  list[CompanyInput]
+    companyList:  list[CompanyInput],
+    proxy : str  | None = None
 )-> pd.DataFrame:
     SCRAPER_CPY_MAPPING = {
         CompanySite.INDEED: IndeedCpyScraper,
@@ -261,7 +262,7 @@ def scrape_company(
     site_to_company_dict = {}
     def scrape_site(site: CompanySite) -> Tuple[str, CompanyResponse]:
         scraper_class = SCRAPER_CPY_MAPPING[site]
-        scraper = scraper_class()
+        scraper = scraper_class(proxy= proxy)
         if site == CompanySite.GLASSDOOR:
             scraped_data: CompanyResponse = scraper.scrape(namesList_withoutIds)
         else:
@@ -276,7 +277,7 @@ def scrape_company(
     
     def worker_id():
         idsList_filtered= [obj.id for obj in idsList if obj.site == CompanySite.GLASSDOOR.value ]
-        scraped_data: CompanyResponse = GlassdoorCpyScraper().scrape(companyIdList=idsList_filtered, country=Country.FRANCE)
+        scraped_data: CompanyResponse = GlassdoorCpyScraper(proxy= proxy).scrape(companyIdList=idsList_filtered, country=Country.FRANCE)
         cap_name =CompanySite.GLASSDOOR.value.capitalize()
         logger.info(f"{cap_name} with ids finished scraping")
         return CompanySite.GLASSDOOR.value + "_id", scraped_data
@@ -361,7 +362,8 @@ def scrape_company(
 
 
 def scrape_salary(
-    jobInputList:  list[JobInput]
+    jobInputList:  list[JobInput],
+    proxy: str | None = None
 )-> pd.DataFrame:
     SCRAPER_SALARY_MAPPING = {
         SalarySite.GLASSDOOR: GlassdoorSalaryScraper
@@ -372,7 +374,7 @@ def scrape_salary(
     site_to_salary_dict = {}
     def scrape_site(site: SalarySite) -> Tuple[str, SalaryResponse]:
         scraper_class = SCRAPER_SALARY_MAPPING[site]
-        scraper = scraper_class()
+        scraper = scraper_class(proxy=proxy)
         scraped_data: SalaryResponse = scraper.scrapeList(jobInputList)
         cap_name = site.value.capitalize()
         logger.info(f"{cap_name} finished scraping")

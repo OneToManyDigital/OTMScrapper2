@@ -2,6 +2,7 @@ import re
 from botasaurus import browser,AntiDetectDriver,bt
 from ..company import CompanyResponse, CompanyDescr, CompanySite
 from ..scrapers.utils import getElementText,getElement,getElementsText,getElements, markdown_converter
+from typing import Optional
 
 
 @browser(block_images=True,
@@ -114,6 +115,11 @@ def search_company(driver: AntiDetectDriver, data):
 
 from unidecode import unidecode
 class WTJCpyScraper():
+    def __init__(self, proxy: Optional[str] = None):
+        """
+        Initializes GlassdoorCpyScraperWithName with the Glassdoor job search url
+        """
+        self.proxy=proxy[:-1] if proxy.endswith('/') else proxy
 
     def scrape(self, companyList:  list[str]) -> CompanyResponse:
         all_company: list[CompanyDescr] = []
@@ -123,7 +129,7 @@ class WTJCpyScraper():
             __company= company.replace(" ", "-")
             __company = __company.lower()
             __company = unidecode(__company)
-            result = search_company(__company)
+            result = search_company(__company,  proxy=self.proxy)
             if result:
                 result.name = company
                 all_company.append(result)

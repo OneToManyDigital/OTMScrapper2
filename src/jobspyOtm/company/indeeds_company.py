@@ -2,6 +2,7 @@
 from botasaurus import browser,AntiDetectDriver,bt
 from ..company import CompanyResponse, CompanyDescr, CompanySite
 from ..scrapers.utils import getElementText,getElement, markdown_converter
+from typing import Optional
 
 
 BASE_URL="https://fr.indeed.com/cmp/"
@@ -52,6 +53,11 @@ def scrape_details_task(driver: AntiDetectDriver, data):
 
 
 class IndeedCpyScraper():
+    def __init__(self, proxy: Optional[str] = None):
+        """
+        Initializes GlassdoorCpyScraperWithName with the Glassdoor job search url
+        """
+        self.proxy=proxy[:-1] if proxy.endswith('/') else proxy
 
     def scrape(self, companyList:  list[str]) -> CompanyResponse:
         all_company: list[CompanyDescr] = []
@@ -59,7 +65,7 @@ class IndeedCpyScraper():
             if company is None or company == "":
                 continue
             __company= company.replace(" ", "-")
-            result = scrape_details_task(__company)
+            result = scrape_details_task(__company,  proxy=self.proxy)
             if result:
                 all_company.append(result)
         return CompanyResponse(companyList=all_company)

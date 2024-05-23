@@ -15,8 +15,6 @@ def test_wtj():
     results_wanted=5, 
     )
 
-    print(result)
-    assert 1== 2
     assert (
         isinstance(result, pd.DataFrame) and not result.empty
     ), "Result should be a non-empty DataFrame"

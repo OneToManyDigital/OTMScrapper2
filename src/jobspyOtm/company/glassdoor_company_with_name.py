@@ -1,6 +1,7 @@
 
 from botasaurus import browser,AntiDetectDriver,bt
 from . import CompanyResponse, CompanyDescr, CompanySite
+from typing import Optional
 
 
 BASE_GLASSDOOR_URL="https://www.glassdoor.fr/"
@@ -10,7 +11,7 @@ BASE_GLASSDOOR_URL="https://www.glassdoor.fr/"
          output=None,
         close_on_crash=True,
         cache=False,
-        headless=True
+        headless=True,
          )
 def scrape_details_task(driver: AntiDetectDriver, data):
     driver.organic_get(data, accept_cookies=True)
@@ -62,11 +63,16 @@ def search_company(driver: AntiDetectDriver, data):
     resultElements =driver.get_elements_or_none_by_xpath('//h2/a')
     details=None
     if resultElements != None and len(resultElements) > 0:
-           details= scrape_details_task(resultElements[0].get_attribute("href"))
+           details= scrape_details_task(resultElements[0].get_attribute("href"), proxy = driver.config.proxy)
    
     return details
 
 class GlassdoorCpyScraperWithName():
+    def __init__(self, proxy: Optional[str] = None):
+        """
+        Initializes GlassdoorCpyScraperWithName with the Glassdoor job search url
+        """
+        self.proxy=proxy[:-1] if proxy.endswith('/') else proxy
 
     def scrape(self, companyList:  list[str]) -> CompanyResponse:
         all_company: list[CompanyDescr] = []
@@ -74,7 +80,7 @@ class GlassdoorCpyScraperWithName():
             if company is None or company == "":
                 continue
             __company= company.replace(" ", "-")
-            result = search_company(__company)
+            result = search_company(__company,  proxy=self.proxy)
             if result:
                 result.name = company
                 all_company.append(result)
