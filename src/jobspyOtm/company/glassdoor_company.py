@@ -45,7 +45,7 @@ class GlassdoorCpyScraper():
         size = mainData['size']
         name = mainData['shortName']
         type_of_ownership= mainData['type']
-        founded= mainData['yearFounded']
+        founded= str(mainData['yearFounded']) if mainData['yearFounded'] else None
         revenue=mainData['type']
         sector=mainData['primaryIndustry']['industryName'] if mainData['primaryIndustry']  else None
         competitors = []

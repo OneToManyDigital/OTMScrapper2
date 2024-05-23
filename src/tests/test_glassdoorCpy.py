@@ -10,7 +10,8 @@ LOGGER = logging.getLogger(__name__)
 
 def test_company():
 
-    result = scrape_company(companyList=[CompanyInput(id="327894", name="Urbanlinker"),CompanyInput( name="Sopra Steria")]
+    result = scrape_company(companyList=[CompanyInput(id="327894", name="Urbanlinker", site="glassdoor"),CompanyInput( name="Sopra Steria",site="glassdoor")
+                                         , CompanyInput(name="Test",id="test",site="WelcomeToJungle")]
     )
     LOGGER.error(result)
     assert 1 ==2

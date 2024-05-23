@@ -254,7 +254,7 @@ def scrape_company(
         CompanySite.WELCOMETOJUNGLE: WTJCpyScraper
     }
 
-    idsList= [obj.id for obj in companyList if obj.id is not None]
+    idsList= [obj for obj in companyList if obj.id is not None]
     namesList_withoutIds= [obj.name for obj in companyList if obj.id is None]
     namesList = [obj.name for obj in companyList]
 
@@ -275,7 +275,8 @@ def scrape_company(
         return site_val, scraped_info
     
     def worker_id():
-        scraped_data: CompanyResponse = GlassdoorCpyScraper().scrape(companyIdList=idsList, country=Country.FRANCE)
+        idsList_filtered= [obj.id for obj in idsList if obj.site == CompanySite.GLASSDOOR.value ]
+        scraped_data: CompanyResponse = GlassdoorCpyScraper().scrape(companyIdList=idsList_filtered, country=Country.FRANCE)
         cap_name =CompanySite.GLASSDOOR.value.capitalize()
         logger.info(f"{cap_name} with ids finished scraping")
         return CompanySite.GLASSDOOR.value + "_id", scraped_data

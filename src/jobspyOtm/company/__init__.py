@@ -41,3 +41,4 @@ class CompanySite(Enum):
 class CompanyInput(BaseModel):
     id: str | None = None
     name: str 
+    site: str
